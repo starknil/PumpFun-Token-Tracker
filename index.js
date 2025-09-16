@@ -45,7 +45,7 @@ ws.on("open", () => {
   );
 });
 
-ws.on("message", async (msg) => {
+ws.on("mmessage", async (msg) => {
   try {
     const data = JSON.parse(msg);
 
@@ -124,7 +124,7 @@ ws.on("message", async (msg) => {
           );
           const data = await response.json();
           solDetails = { solPrice: data.solana?.usd, lastFetched: Date.now() };
-        };
+        }
 
         const tokenPriceUSD = tokenPrice * solDetails.solPrice;
         const marketCapUSD = marketCap * solDetails.solPrice;
@@ -149,7 +149,8 @@ ws.on("message", async (msg) => {
 
 ⚠️ This token has reached the target market cap threshold of $22,000!
 `;
-            await sendMessage(msg);
+            await sendMessage("channel", msg);
+            await sendMessage("group", token.mint);
 
             console.log(`
 🚀 [MARKET CAP ALERT] Token reached target!
@@ -192,9 +193,7 @@ Market Cap: ${marketCap.toFixed(6)} SOL (~$${marketCapUSD.toFixed(2)})
         token.tokenTotalSupply = null;
         token.marketCapReached = false;
         token.lastTimeMcCheck = null;
-        console.log(
-          `⚠️ Suspicious Pump.fun Token Detected! Suspicious buyers: ${token.suspiciousCount} Mint: ${token.mint}`
-        );
+        /*console.log(`⚠️ Suspicious Pump.fun Token Detected! Suspicious buyers: ${token.suspiciousCount} Mint: ${token.mint}`);
         await sendMessage(`
 <b>⚠️ Suspicious Pump.fun Token Detected!
 
@@ -215,7 +214,7 @@ Market Cap: ${marketCap.toFixed(6)} SOL (~$${marketCapUSD.toFixed(2)})
         } buys are consider suspicious after critical analysis.
 
 🚀 MarketCap Tracking started </i>
-`);
+`);*/
       } else if (
         !token.validated &&
         !token.flagged &&
@@ -223,13 +222,13 @@ Market Cap: ${marketCap.toFixed(6)} SOL (~$${marketCapUSD.toFixed(2)})
           token.buyers.size === 10)
       ) {
         token.validated = true;
-        let reason = buyerSize === 1 ? "First clean buyer" : "10 unique buyers";
+        /* let reason = buyerSize === 1 ? "First clean buyer" : "10 unique buyers";
         console.log(`✅ Valid Token Detected! Mint: ${token.mint}`);
         await sendMessage(`
 ✅ <b>Token is valid after ${reason}!
 
 ✳️ Token Address:</b> <a href="https://solscan.io/token/${token.mint}">${token.mint}</a>
-`);
+`);*/
       }
     }
   } catch (err) {
