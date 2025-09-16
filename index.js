@@ -12,12 +12,21 @@ const {
   HELIUS_API_KEY,
 } = process.env;
 
-const { decodePumpfunData, decodeBuyData, isSuspicious } = require("./utils");
+const {
+  decodePumpfunData,
+  decodeBuyData,
+  isSuspicious,
+  fetchTokenMarketCap,
+} = require("./utils");
 
 const WS_URL = `wss://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
 const ws = new WebSocket(WS_URL);
 
 const trackedTokens = {};
+let solDetails = {
+  solPrice: 0,
+  lastFetched: null,
+};
 
 console.log("Connecting to Helius WebSocket...");
 
@@ -66,6 +75,7 @@ ws.on("message", async (msg) => {
         bondingCurve: pumpfunData.bondingCurve,
         mint: pumpfunData.mint,
         signature,
+        validated: false,
       };
       //console.log(`🚀 New token created: ${pumpfunData.mint}`);
     }
@@ -80,52 +90,143 @@ ws.on("message", async (msg) => {
 
       if (!dataLog) return;
 
-      const buyData = decodeBuyData(dataLog.split("Program data: ")[1]);
+      const buyData = decodeBuyData(
+        dataLog.split("Program data: ")[1],
+        signature
+      );
       if (!buyData) return;
 
       const token = trackedTokens[buyData.mint];
-      if (!token || token.flagged || token.validated) return;
- 
-      if (buyData.solAmount < 0.1) return; // ignore tiny buys
-      if (token.buyers.size >= 20) return; // first 20 buys only
+      if (!token || token.validated) return;
+
+      if (token.flagged && !token.marketCapReached) {
+        if (token.lastTimeMcCheck && Date.now() - token.lastTimeMcCheck < 20000)
+          return;
+
+        if (token.tokenTotalSupply === null) {
+          const mcc = await fetchTokenMarketCap(token.mint);
+          if (!mcc) return;
+          token.tokenTotalSupply = mcc.supply;
+          token.decimals = mcc.decimals;
+        }
+
+        const tokenAmount = buyData.tokenAmount / 10 ** token.decimals;
+        const totalSupply = token.tokenTotalSupply / 10 ** token.decimals;
+        const tokenPrice = buyData.solAmount / tokenAmount;
+        const marketCap = totalSupply * tokenPrice;
+
+        if (
+          !solDetails.lastFetched ||
+          Date.now() - solDetails.lastFetched > 60000
+        ) {
+          const response = await fetch(
+            "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd"
+          );
+          const data = await response.json();
+          solDetails = { solPrice: data.solana?.usd, lastFetched: Date.now() };
+        };
+
+        const tokenPriceUSD = tokenPrice * solDetails.solPrice;
+        const marketCapUSD = marketCap * solDetails.solPrice;
+        token.lastTimeMcCheck = Date.now();
+
+        if (marketCapUSD >= 22000) {
+          token.marketCapReached = true;
+          if (!token.notified) {
+            const msg = `
+🚀 <b>Token Market Cap Alert!
+
+✳️ Mint Address:</b> <a href="https://solscan.io/token/${token.mint}">${
+              token.mint
+            }</a>
+💰 <b>Token Price:</b> ${tokenPrice.toFixed(10)} SOL (~$${tokenPriceUSD.toFixed(
+              2
+            )} USD)
+📊 <b>Market Cap:</b> ${marketCap.toFixed(6)} SOL (~$${marketCapUSD.toFixed(
+              2
+            )} USD)
+
+⚠️ This token has reached the target market cap threshold of $22,000!
+`;
+            await sendMessage(msg);
+
+            console.log(`
+🚀 [MARKET CAP ALERT] Token reached target!
+
+Mint: ${token.mint}
+Price: ${tokenPrice.toFixed(10)} SOL (~$${tokenPriceUSD.toFixed(2)})
+Market Cap: ${marketCap.toFixed(6)} SOL (~$${marketCapUSD.toFixed(2)})
+---------------------------
+`);
+            token.notified = true;
+          }
+        }
+      }
+
       if (token.buyers.has(buyData.user)) return; // unique addresses only
+      let buyerSize = token.buyers.size;
+
+      let minBuy = buyerSize === 0 ? 0 : 0.16;
+
+      if (buyData.solAmount < minBuy) return;
 
       token.buyers.add(buyData.user);
+      buyerSize = token.buyers.size;
 
-      const suspicious = await isSuspicious(buyData.user, buyData.mint);
+      const suspicious = await isSuspicious(
+        buyData.user,
+        buyData.mint,
+        buyerSize
+      );
 
       if (suspicious == "error") return;
 
-      if (suspicious){
-        token.suspiciousCount++
+      if (suspicious) {
+        token.suspiciousCount++;
         token.suspiciousBuyers.push(buyData);
-      };
+      }
 
       // Flag if >= MAX_SUSPICIOUS_COUNT
       if (token.suspiciousCount >= 4 && !token.flagged) {
         token.flagged = true;
+        token.tokenTotalSupply = null;
+        token.marketCapReached = false;
+        token.lastTimeMcCheck = null;
         console.log(
           `⚠️ Suspicious Pump.fun Token Detected! Suspicious buyers: ${token.suspiciousCount} Mint: ${token.mint}`
         );
-
-        console.log(token.suspiciousBuyers);
-
         await sendMessage(`
 <b>⚠️ Suspicious Pump.fun Token Detected!
 
 ⛔️ Suspicious buyers:</b> ${token.suspiciousCount}
-- ${ token.suspiciousBuyers.map(b => `${b.user}`).join('\n- ') }
+- ${token.suspiciousBuyers
+          .map(
+            (b) =>
+              `<a href="https://solscan.io/account/${b.user}">${b.user}</a> bought ${b.tokenAmount}(RAW) tokens (${b.solAmount} SOL)`
+          )
+          .join("\n- ")}
 
-✳️ <b>Mint Address:</b> <a href="https://solscan.io/token/${token.mint}">${token.mint}</a>
+✳️ <b>Mint Address:</b> <a href="https://solscan.io/token/${token.mint}">${
+          token.mint
+        }</a>
 
-<i>✍️ Out of the first ${token.buyers.size} buyers, ${token.suspiciousCount} buys are consider suspicious after critical analysis.</i>
+<i>✍️ Out of the first ${token.buyers.size} buyers, ${
+          token.suspiciousCount
+        } buys are consider suspicious after critical analysis.
+
+🚀 MarketCap Tracking started </i>
 `);
-      } else if (!token.validated && token.buyers.size === 20) {
+      } else if (
+        !token.validated &&
+        !token.flagged &&
+        ((buyerSize === 1 && token.suspiciousCount === 0) ||
+          token.buyers.size === 10)
+      ) {
         token.validated = true;
-        console.log(`✅ Valid Token Detected! Mint: ${token.mint}`)
-        console.log(token.suspiciousBuyers);
+        let reason = buyerSize === 1 ? "First clean buyer" : "10 unique buyers";
+        console.log(`✅ Valid Token Detected! Mint: ${token.mint}`);
         await sendMessage(`
-✅ <b>Token is valid after first 20 buy!
+✅ <b>Token is valid after ${reason}!
 
 ✳️ Token Address:</b> <a href="https://solscan.io/token/${token.mint}">${token.mint}</a>
 `);

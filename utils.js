@@ -5,6 +5,7 @@ const {
   HELIUS_API_KEY,
 } = process.env;
 
+
 const decodePumpfunData = (base64Data) => {
   const buffer = Buffer.from(base64Data, "base64");
   let offset = 8; // skip discriminator
@@ -37,7 +38,7 @@ const decodePumpfunData = (base64Data) => {
 }
 
 
-const decodeBuyData = (base64Data) => {
+const decodeBuyData = (base64Data, signature) => {
   const buffer = Buffer.from(base64Data, "base64");
   let offset = 8;
 
@@ -66,14 +67,14 @@ const decodeBuyData = (base64Data) => {
 
   const timestamp = Number(buffer.readBigInt64LE(offset));
 
-  return { mint, solAmount, tokenAmount, user, bondingCurve, timestamp };
+  return { mint, solAmount, tokenAmount, user, bondingCurve, signature, timestamp };
 };
 
 
-async function isSuspicious(wallet, tokenMint) {
+async function isSuspicious(wallet, tokenMint, c) {
   try {
     const res = await fetch(
-      `https://api.helius.xyz/v0/addresses/${wallet}/transactions/?api-key=${HELIUS_API_KEY}&limit=50`
+      `https://api.helius.xyz/v0/addresses/${wallet}/transactions/?api-key=${HELIUS_API_KEY}&limit=4`
     );
     const data = await res.json();
 
@@ -81,8 +82,8 @@ async function isSuspicious(wallet, tokenMint) {
 
     if (data.length === 0) return true; // not transaction history, suspicious
 
-    // If user has more than 7 transactions, not suspicious
-    if (data.length > 7) return false;
+    // If user has more than 3 transactions, not suspicious
+    if (data.length > 3) return false;
 
     // Track flags in a single pass
     let hasBoughtOtherToken = false;
@@ -103,7 +104,7 @@ async function isSuspicious(wallet, tokenMint) {
         hasSmallTrade = tx.nativeTransfers?.some(
           n => (n.fromUserAccount === wallet || n.toUserAccount === wallet) && n.amount < 60_000_000
         ) ?? false;
-      }
+      };
 
       // Early exit if both flags are true
       if (hasBoughtOtherToken && hasSmallTrade) break;
@@ -119,9 +120,40 @@ async function isSuspicious(wallet, tokenMint) {
 }
 
 
+async function fetchTokenMarketCap(tokenMint) {
+
+    const cache = new Map();
+  try {
+    const body = {
+      jsonrpc: "2.0",
+      id: "1",
+      method: "getAsset",
+      params: {
+        id: tokenMint,
+      }
+    };
+
+    const response = await fetch(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    const data = await response.json();
+
+    return data.result?.token_info;
+
+  } catch (err) {
+    console.error("Error fetching market cap from Helius:", err.message);
+    return null;
+  }
+}
+
+//fetchTokenMarketCap("6xLGtRLwCi8Yh4tesWNoZpptH4UV9iKV3n9H9Jxppump");
 
 module.exports = {
     decodePumpfunData,
     decodeBuyData,
-    isSuspicious
+    isSuspicious,
+    fetchTokenMarketCap
 };
