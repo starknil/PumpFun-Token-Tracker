@@ -98,7 +98,7 @@ ws.on("message", async (msg) => {
 
       const token = trackedTokens[buyData.mint];
       if (!token || token.validated) return;
-
+      if (token.validated) return;
       if (token.flagged && !token.marketCapReached) {
         if (token.lastTimeMcCheck && Date.now() - token.lastTimeMcCheck < 20000)
           return;
@@ -133,6 +133,7 @@ ws.on("message", async (msg) => {
         if (marketCapUSD >= 22000) {
           token.marketCapReached = true;
           if (!token.notified) {
+            token.notified = true;
             const msg = `
 🚀 <b>Token Market Cap Alert!
 
@@ -158,7 +159,6 @@ Price: ${tokenPrice.toFixed(10)} SOL (~$${tokenPriceUSD.toFixed(2)})
 Market Cap: ${marketCap.toFixed(6)} SOL (~$${marketCapUSD.toFixed(2)})
 ---------------------------
 `);
-            token.notified = true;
           }
         }
       }
