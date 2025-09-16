@@ -45,7 +45,7 @@ ws.on("open", () => {
   );
 });
 
-ws.on("mmessage", async (msg) => {
+ws.on("message", async (msg) => {
   try {
     const data = JSON.parse(msg);
 
@@ -193,8 +193,7 @@ Market Cap: ${marketCap.toFixed(6)} SOL (~$${marketCapUSD.toFixed(2)})
         token.tokenTotalSupply = null;
         token.marketCapReached = false;
         token.lastTimeMcCheck = null;
-        /*console.log(`⚠️ Suspicious Pump.fun Token Detected! Suspicious buyers: ${token.suspiciousCount} Mint: ${token.mint}`);
-        await sendMessage(`
+        await sendMessage('channel', `
 <b>⚠️ Suspicious Pump.fun Token Detected!
 
 ⛔️ Suspicious buyers:</b> ${token.suspiciousCount}
@@ -214,7 +213,7 @@ Market Cap: ${marketCap.toFixed(6)} SOL (~$${marketCapUSD.toFixed(2)})
         } buys are consider suspicious after critical analysis.
 
 🚀 MarketCap Tracking started </i>
-`);*/
+`);
       } else if (
         !token.validated &&
         !token.flagged &&
