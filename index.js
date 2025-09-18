@@ -4,22 +4,29 @@ const { PublicKey } = require("@solana/web3.js");
 const fetch = require("node-fetch");
 const { sendMessage } = require("./bot");
 
+
 const {
   PUMP_FUN_PROGRAM_ID,
-  MINIMUM_VALID_BUY_AMOUNT = "0.01",
-  CHECK_UNTIL_STOP = "40",
-  MAX_SUSPICIOUS_COUNT = "5",
+  CHECK_UNTIL_STOP,
+  MAX_SUSPICIOUS_COUNT,
+  MARKET_CAP_TRACK,
   HELIUS_API_KEY,
+  SYNDICA_API_KEY
 } = process.env;
 
 const {
   decodePumpfunData,
   decodeBuyData,
-  isSuspicious,
+  isSuspiciousHelius,
   fetchTokenMarketCap,
+  isSuspiciousSyndica,
 } = require("./utils");
 
-const WS_URL = `wss://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
+
+//let WS_URL = `wss://vmainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
+const WS_URL = `wss://solana-mainnet.api.syndica.io/api-key/${SYNDICA_API_KEY}`;
+
+
 const ws = new WebSocket(WS_URL);
 
 const trackedTokens = {};
@@ -28,7 +35,7 @@ let solDetails = {
   lastFetched: null,
 };
 
-console.log("Connecting to Helius WebSocket...");
+console.log("Connecting to Syndica WebSocket...");
 
 ws.on("open", () => {
   console.log("Connected. Subscribing to Pump.fun program logs...");
@@ -46,6 +53,7 @@ ws.on("open", () => {
 });
 
 ws.on("message", async (msg) => {
+
   try {
     const data = JSON.parse(msg);
 
@@ -98,9 +106,9 @@ ws.on("message", async (msg) => {
 
       const token = trackedTokens[buyData.mint];
       if (!token || token.validated) return;
-      if (token.validated) return;
+
       if (token.flagged && !token.marketCapReached) {
-        if (token.lastTimeMcCheck && Date.now() - token.lastTimeMcCheck < 20000)
+        if (token.lastTimeMcCheck && Date.now() - token.lastTimeMcCheck < 5000)
           return;
 
         if (token.tokenTotalSupply === null) {
@@ -117,7 +125,7 @@ ws.on("message", async (msg) => {
 
         if (
           !solDetails.lastFetched ||
-          Date.now() - solDetails.lastFetched > 60000
+          Date.now() - solDetails.lastFetched > 30000
         ) {
           const response = await fetch(
             "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd"
@@ -130,7 +138,10 @@ ws.on("message", async (msg) => {
         const marketCapUSD = marketCap * solDetails.solPrice;
         token.lastTimeMcCheck = Date.now();
 
-        if (marketCapUSD >= 22000) {
+
+        console.log(token.mint, tokenPriceUSD.toFixed(10), marketCapUSD.toFixed(2));
+
+        if (marketCapUSD >= MARKET_CAP_TRACK) {
           token.marketCapReached = true;
           if (!token.notified) {
             token.notified = true;
@@ -147,7 +158,7 @@ ws.on("message", async (msg) => {
               2
             )} USD)
 
-⚠️ This token has reached the target market cap threshold of $22,000!
+⚠️ This token has reached the target market cap threshold of ${Number(MARKET_CAP_TRACK).toLocaleString()}!
 `;
             await sendMessage("channel", msg);
             await sendMessage("group", token.mint);
@@ -174,7 +185,7 @@ Market Cap: ${marketCap.toFixed(6)} SOL (~$${marketCapUSD.toFixed(2)})
       token.buyers.add(buyData.user);
       buyerSize = token.buyers.size;
 
-      const suspicious = await isSuspicious(
+      const suspicious = await isSuspiciousSyndica(
         buyData.user,
         buyData.mint,
         buyerSize
@@ -188,7 +199,7 @@ Market Cap: ${marketCap.toFixed(6)} SOL (~$${marketCapUSD.toFixed(2)})
       }
 
       // Flag if >= MAX_SUSPICIOUS_COUNT
-      if (token.suspiciousCount >= 4 && !token.flagged) {
+      if (token.suspiciousCount >= MAX_SUSPICIOUS_COUNT && !token.flagged) {
         token.flagged = true;
         token.tokenTotalSupply = null;
         token.marketCapReached = false;
@@ -218,18 +229,12 @@ Market Cap: ${marketCap.toFixed(6)} SOL (~$${marketCapUSD.toFixed(2)})
         !token.validated &&
         !token.flagged &&
         ((buyerSize === 1 && token.suspiciousCount === 0) ||
-          token.buyers.size === 10)
-      ) {
+          token.buyers.size == CHECK_UNTIL_STOP)
+      ){
         token.validated = true;
-        /* let reason = buyerSize === 1 ? "First clean buyer" : "10 unique buyers";
-        console.log(`✅ Valid Token Detected! Mint: ${token.mint}`);
-        await sendMessage(`
-✅ <b>Token is valid after ${reason}!
-
-✳️ Token Address:</b> <a href="https://solscan.io/token/${token.mint}">${token.mint}</a>
-`);*/
+        delete trackedTokens[token.mint];
       }
-    }
+    };
   } catch (err) {
     console.error("Error processing WS message:", err);
   }
@@ -237,3 +242,16 @@ Market Cap: ${marketCap.toFixed(6)} SOL (~$${marketCapUSD.toFixed(2)})
 
 ws.on("close", () => console.log("WS connection closed."));
 ws.on("error", (err) => console.error("WS error:", err));
+
+
+process.on("SIGINT", () => {
+  console.log("Closing WebSocket before shutdown...");
+  ws.close();
+  process.exit();
+});
+
+process.on("SIGTERM", () => {
+  console.log("Closing WebSocket before shutdown...");
+  ws.close();
+  process.exit();
+});
