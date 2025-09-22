@@ -102,13 +102,18 @@ ws.on("message", async (msg) => {
         dataLog.split("Program data: ")[1],
         signature
       );
+
       if (!buyData) return;
 
       const token = trackedTokens[buyData.mint];
       if (!token || token.validated) return;
 
+
       if (token.flagged && !token.marketCapReached) {
-        if (token.lastTimeMcCheck && Date.now() - token.lastTimeMcCheck < 5000)
+
+        if (buyData.solAmount < 0.01) return;
+
+        if (token.lastTimeMcCheck && Date.now() - token.lastTimeMcCheck < 2000)
           return;
 
         if (token.tokenTotalSupply === null) {
