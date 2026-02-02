@@ -217,7 +217,7 @@ Market Cap: ${marketCap.toFixed(6)} SOL (~$${marketCapUSD.toFixed(2)})
         const metadata = await r.json();
         const { twitter } = metadata || {};
         //console.log(twitter);
-        if (!twitter || !twitter.includes("//") || !twitter.split("//")[1].startsWith("x.com")) return;
+        if (!twitter || !twitter.includes("//") || twitter.includes("status") || !twitter.split("//")[1].startsWith("x.com")) return;
         await sendMessage('channel', `
 <b>⚠️ Suspicious Pump.fun Token Detected!
 
