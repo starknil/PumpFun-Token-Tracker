@@ -212,6 +212,11 @@ Market Cap: ${marketCap.toFixed(6)} SOL (~$${marketCapUSD.toFixed(2)})
         token.tokenTotalSupply = null;
         token.marketCapReached = false;
         token.lastTimeMcCheck = null;
+        if (token.uri){
+        const r = await fetch(token.uri);
+        const metadata = await r.json();
+        console.log(metadata.twitter);
+      };
         await sendMessage('channel', `
 <b>⚠️ Suspicious Pump.fun Token Detected!
 
