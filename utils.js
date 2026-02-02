@@ -265,7 +265,7 @@ async function fetchTokenMarketCap(tokenMint) {
       decimals
     }
 
-    console.log(tokenMint, token_info);
+    //console.log(tokenMint, token_info);
 
     return token_info;
 
