@@ -153,12 +153,14 @@ ws.on("message", async (msg) => {
           token.marketCapReached = true;
           if (!token.notified) {
             token.notified = true;
+            if (token.twitter){
             const msg = `
 🚀 <b>Token Market Cap Alert!
 
 ✳️ Mint Address:</b> <a href="https://solscan.io/token/${token.mint}">${
               token.mint
             }</a>
+🫆 <b> Twitter:</b> ${token.twitter}
 💰 <b>Token Price:</b> ${tokenPrice.toFixed(10)} SOL (~$${tokenPriceUSD.toFixed(
               2
             )} USD)
@@ -170,15 +172,7 @@ ws.on("message", async (msg) => {
 `;
             await sendMessage("channel", msg);
             await sendMessage("group", token.mint);
-
-            console.log(`
-🚀 [MARKET CAP ALERT] Token reached target!
-
-Mint: ${token.mint}
-Price: ${tokenPrice.toFixed(10)} SOL (~$${tokenPriceUSD.toFixed(2)})
-Market Cap: ${marketCap.toFixed(6)} SOL (~$${marketCapUSD.toFixed(2)})
----------------------------
-`);
+            }
           }
         }
       }
@@ -218,6 +212,7 @@ Market Cap: ${marketCap.toFixed(6)} SOL (~$${marketCapUSD.toFixed(2)})
         const { twitter } = metadata || {};
         //console.log(twitter);
         if (!twitter || !twitter.includes("//") || twitter.includes("status") || !twitter.split("//")[1].startsWith("x.com")) return;
+        token.twitter = twitter;
         await sendMessage('channel', `
 <b>⚠️ Suspicious Pump.fun Token Detected!
 
