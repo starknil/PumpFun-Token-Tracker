@@ -72,6 +72,11 @@ ws.on("message", async (msg) => {
       if (!dataLog) return;
       const base64Data = dataLog.split("Program data: ")[1];
       const pumpfunData = decodePumpfunData(base64Data);
+      
+      if (pumpfunData.uri){
+        console.log(pumpfunData.uri);
+      };
+      
       pumpfunData.signature = signature;
       pumpfunData.validated = false;
 
