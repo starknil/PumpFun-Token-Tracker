@@ -73,11 +73,6 @@ ws.on("message", async (msg) => {
       const base64Data = dataLog.split("Program data: ")[1];
       const pumpfunData = decodePumpfunData(base64Data);
       
-      if (pumpfunData.uri){
-        const r = await fetch(pumpfunData.uri);
-        const metadata = await r.json();
-        console.log(metadata);
-      };
       
       pumpfunData.signature = signature;
       pumpfunData.validated = false;
@@ -89,6 +84,7 @@ ws.on("message", async (msg) => {
         flagged: false,
         bondingCurve: pumpfunData.bondingCurve,
         mint: pumpfunData.mint,
+        uri: pumpfunData.uri,
         signature,
         validated: false,
       };
