@@ -227,7 +227,7 @@ Market Cap: ${marketCap.toFixed(6)} SOL (~$${marketCapUSD.toFixed(2)})
 - ${token.suspiciousBuyers
           .map(
             (b) =>
-              `<a href="https://solscan.io/account/${b.user}">${b.user}</a> bought ${b.tokenAmount}(RAW) tokens (${b.solAmount} SOL)`
+              `<a href="https://solscan.io/account/${b.user}">${b.user}</a> bought ${b.tokenAmount.toLocaleString()}(RAW) tokens (${b.solAmount} SOL)`
           )
           .join("\n- ")}
 
