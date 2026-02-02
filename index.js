@@ -153,6 +153,7 @@ ws.on("message", async (msg) => {
           token.marketCapReached = true;
           if (!token.notified) {
             token.notified = true;
+            console.log(token);
             if (token.twitter){
             const msg = `
 🚀 <b>Token Market Cap Alert!
