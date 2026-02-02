@@ -213,12 +213,13 @@ Market Cap: ${marketCap.toFixed(6)} SOL (~$${marketCapUSD.toFixed(2)})
         token.marketCapReached = false;
         token.lastTimeMcCheck = null;
         if (!token.uri) return console.log("No valid metadata uri");
-        
         const r = await fetch(token.uri);
         const metadata = await r.json();
         const { twitter } = metadata || {};
         console.log(twitter);
-        if (!twitter) return console.log("No valid twitter info");
+        if (!twitter || !twitter.includes("//") || !twitter.split("//")[1].startsWith("x.com")) {
+          return console.log("No valid twitter info");
+        };
         await sendMessage('channel', `
 <b>⚠️ Suspicious Pump.fun Token Detected!
 
@@ -233,6 +234,7 @@ Market Cap: ${marketCap.toFixed(6)} SOL (~$${marketCapUSD.toFixed(2)})
 ✳️ <b>Mint Address:</b> <a href="https://solscan.io/token/${token.mint}">${
           token.mint
         }</a>
+        
 🫆 <b>Twitter:</b> ${twitter}
 
 <i>✍️ Out of the first ${token.buyers.size} buyers, ${
