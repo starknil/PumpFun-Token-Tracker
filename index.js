@@ -74,7 +74,9 @@ ws.on("message", async (msg) => {
       const pumpfunData = decodePumpfunData(base64Data);
       
       if (pumpfunData.uri){
-        console.log(pumpfunData.uri);
+        const r = await fetch(pumpfunData.uri);
+        const metadata = await r.json();
+        console.log(metadata);
       };
       
       pumpfunData.signature = signature;
@@ -149,7 +151,7 @@ ws.on("message", async (msg) => {
         token.lastTimeMcCheck = Date.now();
 
 
-        console.log(token.mint, tokenPriceUSD.toFixed(10), marketCapUSD.toFixed(2));
+        //console.log(token.mint, tokenPriceUSD.toFixed(10), marketCapUSD.toFixed(2));
 
         if (marketCapUSD >= MARKET_CAP_TRACK) {
           token.marketCapReached = true;
